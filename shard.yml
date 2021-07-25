@@ -1,0 +1,9 @@
+name: code_writer
+version: 0.1.0
+
+authors:
+  - Chris Watson <cawatson1993@gmail.com>
+
+crystal: 1.1.0
+
+license: MIT
