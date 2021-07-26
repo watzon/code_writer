@@ -39,7 +39,7 @@ writer.blank_line
 
 writer.write("class Foo").block do
   writer.write("def bar").block do
-    writer.write("print \"baz\"")
+    writer.write_line("print \"baz\"")
   end
 end
 
