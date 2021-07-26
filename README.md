@@ -31,15 +31,15 @@ writer = CodeWriter.new(
 
 # Write code to the buffer
 writer.comment do
-  writer.write_line("This is a comment")
-  writer.write_line("This comment is on another line")
+  writer.puts("This is a comment")
+  writer.puts("This comment is on another line")
 end
 
 writer.blank_line
 
 writer.write("class Foo").block do
   writer.write("def bar").block do
-    writer.write_line("print \"baz\"")
+    writer.puts("print \"baz\"")
   end
 end
 

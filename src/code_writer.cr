@@ -90,7 +90,7 @@ class CodeWriter
   end
 
   # Write text to the internal buffer.
-  def write(str)
+  def print(str)
     string = String.build do |s|
       # Handle being within a comment
       if self.in_multiline_comment? && (self.last_newline? || self.pos == 0)
@@ -121,31 +121,31 @@ class CodeWriter
     buffer = string.to_s.to_slice
     self.utf8 ?
       self.buffer.write_utf8(buffer) :
-      self.buffer.write(buffer)
+      self.buffer.print(buffer)
 
     self
   end
 
   # Write text with a trailing newline, assuming the text doesn't already
   # end with a newline.
-  def write_line(str)
-    write(str).conditional_write(!self.last_newline?, self.newline_text)
+  def puts(str)
+    print(str).print_if(!self.last_newline?, self.newline_text)
   end
 
   # Writes text, only if the condition is true.
-  def conditional_write(condition : Bool, str : String | Char | Bytes)
-    self.write(str) if condition
+  def print_if(condition : Bool, str : String | Char | Bytes)
+    self.print(str) if condition
     self
   end
 
-  # Set the indentation level for the next lines and write a newline.
+  # Set the indentation level for the next lines and print a newline.
   #
   # ```
-  # writer.write("def foo")
+  # writer.print("def foo")
   #       .indent
-  #       .write("# do something")
+  #       .print("# do something")
   #       .dedent
-  #       .write("end")
+  #       .print("end")
   # ```
   def indent(amount : Int32 = 1)
     self.newline
@@ -157,8 +157,8 @@ class CodeWriter
   # once the block exits.
   #
   # ```
-  # writer.write("def foo").indent do
-  #   writer.write("# do something")
+  # writer.print("def foo").indent do
+  #   writer.print("# do something")
   # end
   # ```
   def indent(amount : Int32 = 1, &block : ->)
@@ -175,31 +175,31 @@ class CodeWriter
   end
 
   def block(&block : ->)
-    self.conditional_write(self.space_before_block_start, CHARS["space"])
-        .write(self.block_start)
+    self.print_if(self.space_before_block_start, CHARS["space"])
+        .print(self.block_start)
         .indent(&block)
-        .write(self.block_end)
+        .print(self.block_end)
     self
   end
 
   def inline_block(&block : ->)
     return self.block(&block) unless self.language_settings.supports_inline_block?
 
-    self.conditional_write(self.space_before_block_start, CHARS["space"])
-        .write(self.inline_block_start.not_nil!)
-        .write(CHARS["space"])
+    self.print_if(self.space_before_block_start, CHARS["space"])
+        .print(self.inline_block_start.not_nil!)
+        .print(CHARS["space"])
 
         yield
 
-    self.write(CHARS["space"])
-        .write(self.inline_block_end.not_nil!)
+    self.print(CHARS["space"])
+        .print(self.inline_block_end.not_nil!)
 
     self
   end
 
   def newline
     self.newline_next_write = false
-    self.write(self.newline_text)
+    self.print(self.newline_text)
     self
   end
 
@@ -218,22 +218,22 @@ class CodeWriter
   end
 
   def space(count : Int32 = 1)
-    write(CHARS["space"].to_s * count)
+    print(CHARS["space"].to_s * count)
     self
   end
 
   def comment(str)
-    self.write(self.comment_start)
+    self.print(self.comment_start)
         .space
-        .write(str)
+        .print(str)
         .newline_if_last_not
     self
   end
 
   def comment(*, pad : Bool = false, &block : ->)
     if self.supports_multiline_comments?
-      self.write(self.multiline_comment_start)
-          .conditional_write(!pad, CHARS["space"])
+      self.print(self.multiline_comment_start)
+          .print_if(!pad, CHARS["space"])
 
       self.newline_if_last_not if pad
       self.in_multiline_comment = true
@@ -248,18 +248,18 @@ class CodeWriter
         self.set_pos(self.pos - nl.to_s.size)
       end
 
-      self.conditional_write(!pad, CHARS["space"])
-          .write_line(self.multiline_comment_end)
+      self.print_if(!pad, CHARS["space"])
+          .puts(self.multiline_comment_end)
 
       self.newline_if_last_not
     else
-      self.write(self.comment_start).newline if pad
+      self.print(self.comment_start).newline if pad
       self.in_multiline_comment = true
 
       yield
 
       self.in_multiline_comment = false
-      self.newline_if_last_not.write(self.comment_start) if pad
+      self.newline_if_last_not.print(self.comment_start) if pad
 
       self.newline_if_last_not
     end
