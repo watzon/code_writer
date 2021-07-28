@@ -121,8 +121,9 @@ class CodeWriter
     buffer = string.to_s.to_slice
     self.utf8 ?
       self.buffer.write_utf8(buffer) :
-      self.buffer.print(buffer)
+      self.buffer.write(buffer)
 
+    self.buffer.flush
     self
   end
 
@@ -292,8 +293,8 @@ class CodeWriter
   end
 
   def last_n(bytes : Int32 = 1)
-    pos = self.buffer.pos
-    newpos = Math.max(0, pos - bytes)
+    pos = self.buffer.pos # current buffer position
+    newpos = Math.max(0, pos - bytes) # current position - bytes
     self.buffer.pos = newpos
     self.buffer.read_string(pos - newpos)
   end
@@ -311,10 +312,7 @@ class CodeWriter
   end
 
   def to_s
-    pos = @buffer.pos
     @buffer.rewind
-    str = buffer.gets_to_end
-    @buffer.pos = pos
-    str
+    buffer.gets_to_end
   end
 end

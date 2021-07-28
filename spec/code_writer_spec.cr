@@ -230,4 +230,16 @@ Spectator.describe CodeWriter do
       end
     end
   end
+
+  describe "#last_n" do
+    it "should return the last n characters as a string" do
+      writer.print("this is a sentence")
+      expect(writer.last_n(3)).to eq("nce")
+    end
+
+    it "should return available characters if n is longer than buffer" do
+      writer.print("foo")
+      expect(writer.last_n(5)).to eq("foo")
+    end
+  end
 end
