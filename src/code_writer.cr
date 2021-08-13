@@ -90,25 +90,31 @@ class CodeWriter
   end
 
   # Write text to the internal buffer.
-  def print(str)
+  def print(str, format_args : Array | Tuple | Nil = nil)
     string = String.build do |s|
-      # Handle being within a comment
-      if self.in_multiline_comment? && (self.last_newline? || self.pos == 0)
-        if self.supports_multiline_comments?
-          # s << (CHARS["space"] * (self.multiline_comment_start.size + 1))
-        else
-          s << self.comment_start
-          s << CHARS["space"]
+      if (self.last_newline? || self.pos == 0)
+        # Handle being within a comment
+        if self.in_multiline_comment?
+          if self.supports_multiline_comments?
+            # s << (CHARS["space"] * (self.multiline_comment_start.size + 1))
+          else
+            s << self.comment_start
+            s << CHARS["space"]
+          end
+        end
+
+        # Handle indentation
+        if self.indent_level > 0
+          s << self.indent_text * self.indent_level
         end
       end
 
-      # Handle indentation
-      if self.indent_level > 0
-        s << self.indent_text * self.indent_level
-      end
-
       # Write the given string
-      s << str
+      if format_args
+        s.printf(str, format_args)
+      else
+        s.print(str)
+      end
 
       # Handle newline
       if self.newline_next_write?
@@ -127,16 +133,30 @@ class CodeWriter
     self
   end
 
+  # :ditto:
+  def print(str, *args)
+    print(str, args)
+  end
+
   # Write text with a trailing newline, assuming the text doesn't already
   # end with a newline.
-  def puts(str)
-    print(str).print_if(!self.last_newline?, self.newline_text)
+  def puts(str, format_args = nil)
+    print(str, format_args).print_if(!self.last_newline?, self.newline_text)
+  end
+
+  # :ditto:
+  def puts(str, *args)
+    puts(str, args)
   end
 
   # Writes text, only if the condition is true.
-  def print_if(condition : Bool, str : String | Char | Bytes)
-    self.print(str) if condition
+  def print_if(condition : Bool, str : String | Char | Bytes, format_args = nil)
+    self.print(str, format_args) if condition
     self
+  end
+
+  def print_if(condition, str, *args)
+    print_if(condition, str, args)
   end
 
   # Set the indentation level for the next lines and print a newline.
