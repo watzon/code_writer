@@ -1,10 +1,13 @@
 require "./spec_helper"
 
 Spectator.describe CodeWriter do
-  let(io)     { IO::Memory.new }
-  let(writer) { CodeWriter.new(buffer: io, newline_text: "\n", tab_count: 4)  }
+  let(io) { IO::Memory.new }
+  let(writer) { CodeWriter.new(buffer: io, newline_text: "\n", tab_count: 4) }
 
-  before_each { io.clear }
+  before_each do
+    io.clear
+    writer.reset!
+  end
 
   describe "#print" do
     it "writes a string" do
@@ -17,16 +20,15 @@ Spectator.describe CodeWriter do
       expect(writer.to_s).to eq("😄❤️️😋")
     end
 
-    it "respects utf8 setting" do
-      io.set_encoding("utf8")
-      writer.utf8 = true
-      writer.print("😄❤️️😋")
-      expect { writer.to_s }.not_to raise_error(ArgumentError, "Invalid multibyte sequence")
+    it "writes a string with a trailing newline" do
+      writer.print("this is a sentence\n")
+      expect(writer.to_s).to eq("this is a sentence\n")
+    end
 
-      io.set_encoding("ascii")
-      writer.utf8 = false
-      writer.print("😄❤️️😋")
-      expect { writer.to_s }.to raise_error(ArgumentError, "Invalid multibyte sequence")
+    it "respects indentation" do
+      writer.indent
+      writer.print("this is indented")
+      expect(writer.to_s).to eq("    this is indented")
     end
   end
 
@@ -37,6 +39,11 @@ Spectator.describe CodeWriter do
     end
 
     it "ends with a single trailing newline" do
+      writer.puts("this is a sentence\n")
+      expect(writer.to_s).to eq("this is a sentence\n")
+    end
+
+    it "only writes a newline if the string doesn't end with one" do
       writer.puts("this is a sentence\n")
       expect(writer.to_s).to eq("this is a sentence\n")
     end
@@ -54,95 +61,135 @@ Spectator.describe CodeWriter do
     end
   end
 
+  describe "#puts_if" do
+    it "writes the string with a trailing newline if the condition is true" do
+      writer.puts_if(true, "this is a sentence")
+      expect(writer.to_s).to eq("this is a sentence\n")
+    end
+
+    it "doesn't print the string if the condition is false" do
+      writer.puts_if(false, "this is a sentence")
+      expect(writer.to_s).to eq("")
+    end
+  end
+
   describe "#indent" do
     it "sets the indent level and writes a newline before next print" do
-      writer.print("this is a sentence")
-            .indent
-            .print("this is indented")
+      writer.puts("this is a sentence")
+        .indent
+        .puts("this is indented")
 
-      expect(writer.to_s).to eq("this is a sentence\n    this is indented")
+      expect(writer.to_s).to eq("this is a sentence\n    this is indented\n")
     end
 
     it "can indent multiple times" do
-      writer.print("this is a sentence")
-            .indent(2)
-            .print("this is indented")
+      writer.puts("this is a sentence")
+        .indent(2)
+        .puts("this is indented")
 
-      expect(writer.to_s).to eq("this is a sentence\n        this is indented")
+      expect(writer.to_s).to eq("this is a sentence\n        this is indented\n")
     end
 
     it "accepts a block argument" do
-      writer.print("this is a sentence").indent do
-        writer.print("this is indented")
+      writer.indent do
+        writer.puts("this is indented")
+        writer.puts("this is indented")
       end
 
-      writer.print("this isn't")
+      writer.puts("this isn't")
 
-      expect(writer.to_s).to eq("this is a sentence\n    this is indented\nthis isn't")
+      expect(writer.to_s).to eq("    this is indented\n    this is indented\nthis isn't\n")
     end
   end
 
   describe "#dedent" do
     it "subtracts from the current indent level and writes a newline before next print" do
-      writer.print("this is a sentence")
-            .indent
-            .print("this is indented")
-            .dedent
-            .print("this isn't")
+      writer.puts("this is a sentence")
+        .indent
+        .puts("this is indented")
+        .dedent
+        .puts("this isn't")
 
-      expect(writer.to_s).to eq("this is a sentence\n    this is indented\nthis isn't")
+      expect(writer.to_s).to eq("this is a sentence\n    this is indented\nthis isn't\n")
     end
 
     it "won't set the indent_level to less than 0" do
       writer.dedent(2)
       expect(writer.@indent_level).to eq(0)
     end
+
+    it "accepts a block argument" do
+      writer.indent do
+        writer.puts("this is indented")
+        writer.puts("this is indented")
+
+        writer.dedent do
+          writer.puts("this isn't")
+        end
+      end
+
+      expect(writer.to_s).to eq("    this is indented\n    this is indented\nthis isn't\n")
+    end
   end
 
   describe "#block" do
-    subject(writer) { CodeWriter.new(buffer: io, newline_text: "\n", tab_count: 4, language_settings: language_settings)  }
+    subject(writer) { CodeWriter.new(buffer: io, newline_text: "\n", tab_count: 4) }
 
-    given language_settings = CodeWriter::LANGUAGES["crystal"]  do
-      it "writes a block given the current language_settings" do
-        writer.print("def foo").block do
-          writer.print("print \"bar\"")
-        end
-
-        expect(writer.to_s).to eq("def foo\n    print \"bar\"\nend")
+    it "accepts an argument for the first line of the block" do
+      writer.block("def foo") do
+        writer.puts("puts \"bar\"")
       end
+
+      expect(writer.to_s).to eq("def foo\n    puts \"bar\"\nend")
     end
 
-    given language_settings = CodeWriter::LANGUAGES["javascript"]  do
-      it "writes a block given the current language_settings" do
-        writer.print("function foo()").block do
-          writer.print("console.log('bar');")
+    it "works with no first line argument" do
+      writer.print("def foo").block do
+        writer.puts("puts \"bar\"")
+      end
+
+      expect(writer.to_s).to eq("def foo\n    puts \"bar\"\nend")
+    end
+
+    describe "provided language settings, uses those settings" do
+      subject(new_writer) { CodeWriter.new(buffer: io, newline_text: "\n", tab_count: 4, language_settings: language_settings) }
+
+      provided language_settings: CodeWriter::LANGUAGES["crystal"] do
+        new_writer.block("def foo") do
+          new_writer.puts("puts \"bar\"")
         end
 
-        expect(writer.to_s).to eq("function foo() {\n    console.log('bar');\n}")
+        expect(new_writer.to_s).to eq("def foo\n    puts \"bar\"\nend")
+      end
+
+      provided language_settings: CodeWriter::LANGUAGES["javascript"] do
+        new_writer.block("function foo()") do
+          new_writer.puts("console.log('bar');")
+        end
+
+        expect(new_writer.to_s).to eq("function foo() {\n    console.log('bar');\n}")
       end
     end
   end
 
   describe "#inline_block" do
-    subject(writer) { CodeWriter.new(buffer: io, newline_text: "\n", tab_count: 4, language_settings: language_settings)  }
+    subject(new_writer) { CodeWriter.new(buffer: io, newline_text: "\n", tab_count: 4, language_settings: language_settings) }
 
-    given language_settings = CodeWriter::LANGUAGES["javascript"]  do
-      it "writes an inine block given the current language_settings" do
-        writer.print("function foo()").inline_block do
-          writer.print("console.log('bar');")
+    describe "provided language settings, uses those settings" do
+      provided language_settings: CodeWriter::LANGUAGES["javascript"] do
+        new_writer.inline_block("function foo()") do
+          new_writer.print("console.log('bar');")
         end
 
-        expect(writer.to_s).to eq("function foo() { console.log('bar'); }")
+        expect(new_writer.to_s).to eq("function foo() { console.log('bar'); }")
       end
-    end
 
-    given language_settings = CodeWriter::LANGUAGES["python"]  do
-      it "writes a normal block if the given language doesn't support inline blocks" do
-        writer.print("def foo").inline_block do
-          writer.print("print('bar')")
+      provided language_settings: CodeWriter::LANGUAGES["python"] do
+        new_writer.inline_block("def foo") do
+          new_writer.print("print('bar')")
         end
 
-        expect(writer.to_s).to eq("def foo:\n    print('bar')\n")
+        expect(new_writer.to_s).to eq("def foo:\n    print('bar')\n")
       end
     end
   end
@@ -150,8 +197,8 @@ Spectator.describe CodeWriter do
   describe "#newline" do
     it "writes a newline" do
       writer.print("this is on one line")
-            .newline
-            .print("this is on another")
+        .newline
+        .print("this is on another")
 
       expect(writer.to_s).to eq("this is on one line\nthis is on another")
     end
@@ -160,8 +207,8 @@ Spectator.describe CodeWriter do
   describe "#blank_line" do
     it "writes a blank line" do
       writer.print("this is on one line")
-            .blank_line
-            .print("this is on another")
+        .blank_line
+        .print("this is on another")
 
       expect(writer.to_s).to eq("this is on one line\n\nthis is on another")
     end
@@ -170,63 +217,65 @@ Spectator.describe CodeWriter do
   describe "#space" do
     it "writes a space" do
       writer.print("This is one sentence.")
-            .space
-            .print("This is another one.")
+        .space
+        .print("This is another one.")
 
       expect(writer.to_s).to eq("This is one sentence. This is another one.")
     end
   end
 
   describe "#comment" do
-    subject(writer) { CodeWriter.new(buffer: io, newline_text: "\n", tab_count: 4, language_settings: language_settings)  }
+    subject(new_writer) { CodeWriter.new(buffer: io, newline_text: "\n", tab_count: 4, language_settings: language_settings) }
 
-    given language_settings = CodeWriter::LANGUAGES["crystal"] do
-      it "writes a single line comment" do
-        writer.comment("this is a single line comment")
-        expect(writer.to_s).to eq("# this is a single line comment\n")
+    describe "single line comment" do
+      provided language_settings: CodeWriter::LANGUAGES["crystal"] do
+        new_writer.comment("this is a single line comment")
+        expect(new_writer.to_s).to eq("# this is a single line comment\n")
       end
 
-      it "handles multiline comments for languages that don't support them" do
-        writer.comment do
-          writer.puts("we are now inside")
-          writer.puts("of a multiline comment")
-        end
-
-        expect(writer.to_s).to eq("# we are now inside\n# of a multiline comment\n")
-      end
-
-      it "pads a multiline comment" do
-        writer.comment(pad: true) do
-          writer.puts("we are now inside")
-          writer.puts("of a multiline comment")
-        end
-
-        expect(writer.to_s).to eq("#\n# we are now inside\n# of a multiline comment\n#\n")
+      provided language_settings: CodeWriter::LANGUAGES["javascript"] do
+        new_writer.comment("this is a single line comment")
+        expect(new_writer.to_s).to eq("// this is a single line comment\n")
       end
     end
 
-    given language_settings = CodeWriter::LANGUAGES["javascript"] do
-      it "writes a single line comment" do
-        writer.comment("this is a single line comment")
-        expect(writer.to_s).to eq("// this is a single line comment\n")
-      end
-
-      it "writes a multiline comment" do
-        writer.comment do
-          writer.puts("we are now inside")
-          writer.puts("of a multiline comment")
+    describe "multiline comments for languages that don't support them" do
+      provided language_settings: CodeWriter::LANGUAGES["crystal"] do
+        new_writer.comment do
+          new_writer.puts("we are now inside")
+          new_writer.puts("of a multiline comment")
         end
 
-        expect(writer.to_s).to eq("/* we are now inside\nof a multiline comment */\n")
+        expect(new_writer.to_s).to eq("# we are now inside\n# of a multiline comment\n")
       end
 
-      it "pads a multiline comment" do
-        writer.comment(pad: true) do
-          writer.puts("we are now inside")
-          writer.puts("of a multiline comment")
+      provided language_settings: CodeWriter::LANGUAGES["javascript"] do
+        new_writer.comment do
+          new_writer.puts("we are now inside")
+          new_writer.puts("of a multiline comment")
         end
 
-        expect(writer.to_s).to eq("/*\nwe are now inside\nof a multiline comment\n*/\n")
+        expect(new_writer.to_s).to eq("/* we are now inside\n * of a multiline comment\n */\n")
+      end
+    end
+
+    describe "multiline comment padding" do
+      provided language_settings: CodeWriter::LANGUAGES["crystal"] do
+        new_writer.comment(pad: true) do
+          new_writer.puts("we are now inside")
+          new_writer.puts("of a multiline comment")
+        end
+
+        expect(new_writer.to_s).to eq("#\n# we are now inside\n# of a multiline comment\n#\n")
+      end
+
+      provided language_settings: CodeWriter::LANGUAGES["javascript"] do
+        new_writer.comment(pad: true) do
+          new_writer.puts("we are now inside")
+          new_writer.puts("of a multiline comment")
+        end
+
+        expect(new_writer.to_s).to eq("/*\n * we are now inside\n * of a multiline comment\n*/\n")
       end
     end
   end

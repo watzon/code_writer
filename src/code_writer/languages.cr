@@ -6,6 +6,7 @@ class CodeWriter
     inline_block_start : String? = nil,
     inline_block_end : String? = nil,
     multiline_comment_start : String? = nil,
+    multiline_comment_middle : String? = nil,
     multiline_comment_end : String? = nil,
     space_before_block_start : Bool = true do
 
@@ -80,6 +81,7 @@ class CodeWriter
       inline_block_end: "}",
       comment_start: "//",
       multiline_comment_start: "/*",
+      multiline_comment_middle: " *",
       multiline_comment_end: "*/",
       space_before_block_start: true,
     ),
